@@ -167,6 +167,10 @@
 		.woocommerce-select-control__control {
 			height: 38px;
 		}
+
+		&:not(.has-inline-tags) .woocommerce-tag {
+			margin-top: 0;
+		}
 	}
 }
 
