@@ -199,14 +199,14 @@ class WC_Products_Tracking {
 						const productTypeOptionsString = getProductTypeOptionsString( productTypeOptions );
 
 						if ( ! isBlockEditor ) {
-							tagsText          = $( '[name=\"tax_input[product_tag]\"]' ).val();
+							tagsText          = $( '[name=\"tax_input[product_tag]\"]' ).val() || '';
 							if ( $( '#content' ).is( ':visible' ) ) {
-								description_value = $( '#content' ).val();
+								description_value = $( '#content' ).val() || '';
 							} else if ( typeof tinymce === 'object' && tinymce.get( 'content' ) ) {
-								description_value = tinymce.get( 'content' ).getContent();
+								description_value = tinymce.get( 'content' ).getContent() || '';
 							}
 						} else {
-							description_value  = $( '.block-editor-rich-text__editable' ).text();
+							description_value  = $( '.block-editor-rich-text__editable' ).text() || '';
 						}
 
 						// We can't just check the number of '.woocommerce_attribute' elements because
@@ -214,8 +214,8 @@ class WC_Products_Tracking {
 						// whether the name and values have been filled out.
 						var numberOfAttributes = $( '.woocommerce_attribute' ).filter( function () {
 							var attributeElement = $( this );
-							var attributeName = attributeElement.find( 'input.attribute_name' ).val();
-							var attributeValues = attributeElement.find( 'textarea[name^=\"attribute_values\"]' ).val();
+							var attributeName = attributeElement.find( 'input.attribute_name' ).val() || '';
+							var attributeValues = attributeElement.find( 'textarea[name^=\"attribute_values\"]' ).val() || '';
 
 							return attributeName !== '' && attributeValues !== '';
 						} ).length;
@@ -224,18 +224,18 @@ class WC_Products_Tracking {
 							attributes:				     numberOfAttributes,
 							categories:				     $( '[name=\"tax_input[product_cat][]\"]:checked' ).length,
 							cross_sells:			     $( '#crosssell_ids option' ).length ? 'Yes' : 'No',
-							description:			     description_value.trim() !== '' ? 'Yes' : 'No',
+							description:			     ( description_value || '' ).trim() !== '' ? 'Yes' : 'No',
 							enable_reviews:			     $( '#comment_status' ).is( ':checked' ) ? 'Yes' : 'No',
 							is_virtual:				     $( '#_virtual' ).is( ':checked' ) ? 'Yes' : 'No',
 							is_block_editor:		     isBlockEditor,
 							is_downloadable:		     $( '#_downloadable' ).is( ':checked' ) ? 'Yes' : 'No',
 							manage_stock:			     $( '#_manage_stock' ).is( ':checked' ) ? 'Yes' : 'No',
-							menu_order:				     parseInt( $( '#menu_order' ).val(), 10 ) !== 0 ? 'Yes' : 'No',
+							menu_order:				     parseInt( $( '#menu_order' ).val() || 0, 10 ) !== 0 ? 'Yes' : 'No',
 							product_gallery:		     $( '#product_images_container .product_images > li' ).length,
-							product_image:			     $( '#_thumbnail_id' ).val() > 0 ? 'Yes' : 'No',
+							product_image:			     parseInt( $( '#_thumbnail_id' ).val() || 0, 10 ) > 0 ? 'Yes' : 'No',
 							product_type:			     $( '#product-type' ).val(),
 							product_type_options_string: productTypeOptionsString,
-							purchase_note:			     $( '#_purchase_note' ).val().length ? 'yes' : 'no',
+							purchase_note:			     ( $( '#_purchase_note' ).val() || '' ).length ? 'yes' : 'no',
 							sale_price:				     $( '#_sale_price' ).val() ? 'yes' : 'no',
 							short_description:		     $( '#excerpt' ).val() ? 'yes' : 'no',
 							stock_quantity_update:	     ( initialStockValue != currentStockValue ) ? 'Yes' : 'No',
