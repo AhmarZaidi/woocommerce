@@ -372,6 +372,7 @@ jQuery( function ( $ ) {
 		},
 
 		reloaded_items: function() {
+			$( '#woocommerce-order-items' ).removeClass( 'wc-order-refunding' );
 			wc_meta_boxes_order.init_tiptip();
 			wc_meta_boxes_order_items.stupidtable.init();
 		},
@@ -551,6 +552,7 @@ jQuery( function ( $ ) {
 			$( 'div.wc-order-refund-items' ).slideDown();
 			$( 'div.wc-order-data-row-toggle' ).not( 'div.wc-order-refund-items' ).slideUp();
 			$( 'div.wc-order-totals-items' ).slideUp();
+			$( '#woocommerce-order-items' ).addClass( 'wc-order-refunding' );
 			$( '#woocommerce-order-items' ).find( 'div.refund' ).show();
 			$( '.wc-order-edit-line-item .wc-order-edit-line-item-actions' ).hide();
 
@@ -566,6 +568,7 @@ jQuery( function ( $ ) {
 			$( 'div.wc-order-data-row-toggle' ).not( 'div.wc-order-bulk-actions' ).slideUp();
 			$( 'div.wc-order-bulk-actions' ).slideDown();
 			$( 'div.wc-order-totals-items' ).slideDown();
+			$( '#woocommerce-order-items' ).removeClass( 'wc-order-refunding' );
 			$( '#woocommerce-order-items' ).find( 'div.refund' ).hide();
 			$( '.wc-order-edit-line-item .wc-order-edit-line-item-actions' ).show();
 

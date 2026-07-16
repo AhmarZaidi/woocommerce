@@ -2444,6 +2444,21 @@ body.woocommerce_page_wc-orders {
 		display: none;
 	}
 
+	&.wc-order-refunding {
+		table.woocommerce_order_items {
+			tbody td.quantity,
+			tbody td.line_cost,
+			tbody td.line_tax,
+			tbody td.item_cost {
+				vertical-align: bottom;
+			}
+
+			div.refund {
+				margin-top: 0.5em;
+			}
+		}
+	}
+
 	.woocommerce_order_items_wrapper {
 		margin: 0;
 		overflow-x: auto;
