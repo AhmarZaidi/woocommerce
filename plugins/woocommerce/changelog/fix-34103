@@ -1,0 +1,4 @@
+Significance: patch
+Type: fix
+
+Fix the misalignment of total discount field when refunding with a discounted product on woocommerce orders
