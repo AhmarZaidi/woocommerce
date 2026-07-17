@@ -392,7 +392,15 @@ function wc_format_coupon_code( $value ) {
  * @return string
  */
 function wc_sanitize_coupon_code( $value ) {
-	$value = wp_kses( sanitize_post_field( 'post_title', html_entity_decode( $value ?? '', ENT_COMPAT, get_bloginfo( 'charset' ) ), 0, 'db' ), 'entities' );
+	$value = $value ?? '';
+	while ( strpos( $value, '&' ) !== false ) {
+		$decoded = html_entity_decode( $value, ENT_QUOTES | ENT_HTML5, get_bloginfo( 'charset' ) );
+		if ( $decoded === $value ) {
+			break;
+		}
+		$value = $decoded;
+	}
+	$value = wp_strip_all_tags( $value );
 	return current_user_can( 'unfiltered_html' ) ? $value : stripslashes( $value );
 }
 
