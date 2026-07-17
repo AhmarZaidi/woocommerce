@@ -476,4 +476,48 @@ class WC_Shortcodes_Test extends WC_Unit_Test_Case {
 
 		$this->assertMatchesRegularExpression( '/This content is password[- ]protected/', $product_page );
 	}
+
+	/**
+	 * Ensure pay_for_order shortcode filters available payment gateways to only the order's assigned method if available.
+	 */
+	public function test_pay_for_order_filters_available_payment_gateways() {
+		global $wp;
+
+		$cheque_gateway          = new WC_Gateway_Cheque();
+		$cheque_gateway->enabled = 'yes';
+
+		$add_cheque = function ( $gateways ) use ( $cheque_gateway ) {
+			$gateways['cheque'] = $cheque_gateway;
+			return $gateways;
+		};
+
+		add_filter( 'woocommerce_available_payment_gateways', $add_cheque );
+
+		$order = WC_Helper_Order::create_order( self::$user_administrator );
+		$order->set_payment_method( 'cheque' );
+		$order->save();
+
+		$wp->query_vars['order-pay'] = $order->get_id();
+		$_GET['pay_for_order']       = 'true';
+		$_GET['key']                 = $order->get_order_key();
+
+		$passed_gateways  = array();
+		$capture_gateways = function ( $order, $button_text, $gateways ) use ( &$passed_gateways ) {
+			$passed_gateways = $gateways;
+		};
+
+		add_action( 'before_woocommerce_pay_form', $capture_gateways, 10, 3 );
+
+		ob_start();
+		WC_Shortcodes::checkout( array() );
+		ob_end_clean();
+
+		$this->assertArrayHasKey( 'cheque', $passed_gateways );
+		$this->assertCount( 1, $passed_gateways );
+		$this->assertTrue( $passed_gateways['cheque']->chosen );
+
+		remove_action( 'before_woocommerce_pay_form', $capture_gateways, 10 );
+		remove_filter( 'woocommerce_available_payment_gateways', $add_cheque );
+		unset( $wp->query_vars['order-pay'], $_GET['pay_for_order'], $_GET['key'] );
+	}
 }

@@ -196,6 +196,11 @@ class WC_Shortcode_Checkout {
 				WC()->customer->save();
 
 				$available_gateways = WC()->payment_gateways()->get_available_payment_gateways();
+
+				if ( $order instanceof WC_Order && $order->get_payment_method() && isset( $available_gateways[ $order->get_payment_method() ] ) ) {
+					$available_gateways = array( $order->get_payment_method() => $available_gateways[ $order->get_payment_method() ] );
+				}
+
 				WC()->payment_gateways()->set_current_gateway( $available_gateways );
 
 				/**
