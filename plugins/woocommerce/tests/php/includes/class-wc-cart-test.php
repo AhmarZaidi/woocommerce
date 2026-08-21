@@ -1850,4 +1850,119 @@ class WC_Cart_Test extends \WC_Unit_Test_Case {
 		$product->delete( true );
 		$coupon->delete( true );
 	}
+
+	/**
+	 * Test that in a multi-package cart with mixed shipping methods (e.g. Local Pickup and Flat Rate),
+	 * items are taxed based on their respective package tax locations and the entire order does not
+	 * incorrectly switch to base taxes.
+	 */
+	public function test_multiple_packages_tax_calculation_with_mixed_local_pickup_and_flat_rate() {
+		update_option( 'woocommerce_calc_taxes', 'yes' );
+		update_option( 'woocommerce_tax_based_on', 'shipping' );
+		update_option( 'woocommerce_default_customer_address', 'base' );
+
+		// Set store base to CA (10% tax).
+		update_option( 'woocommerce_default_country', 'US:CA' );
+
+		// Create tax rates: CA = 10%, NY = 4%.
+		$tax_rate_ca    = array(
+			'tax_rate_country'  => 'US',
+			'tax_rate_state'    => 'CA',
+			'tax_rate'          => '10.0000',
+			'tax_rate_name'     => 'CA Tax',
+			'tax_rate_priority' => 1,
+			'tax_rate_compound' => 0,
+			'tax_rate_shipping' => 1,
+			'tax_rate_order'    => 0,
+			'tax_rate_class'    => '',
+		);
+		$tax_rate_ca_id = WC_Tax::_insert_tax_rate( $tax_rate_ca );
+
+		$tax_rate_ny    = array(
+			'tax_rate_country'  => 'US',
+			'tax_rate_state'    => 'NY',
+			'tax_rate'          => '4.0000',
+			'tax_rate_name'     => 'NY Tax',
+			'tax_rate_priority' => 1,
+			'tax_rate_compound' => 0,
+			'tax_rate_shipping' => 1,
+			'tax_rate_order'    => 0,
+			'tax_rate_class'    => '',
+		);
+		$tax_rate_ny_id = WC_Tax::_insert_tax_rate( $tax_rate_ny );
+
+		$product_a = WC_Helper_Product::create_simple_product( true, array( 'regular_price' => 100 ) );
+		$product_b = WC_Helper_Product::create_simple_product( true, array( 'regular_price' => 100 ) );
+
+		WC()->cart->empty_cart();
+		$cart_item_a = WC()->cart->add_to_cart( $product_a->get_id(), 1 );
+		$cart_item_b = WC()->cart->add_to_cart( $product_b->get_id(), 1 );
+
+		WC()->customer->set_shipping_country( 'US' );
+		WC()->customer->set_shipping_state( 'NY' );
+		WC()->customer->set_shipping_postcode( '10001' );
+		WC()->customer->set_shipping_city( 'New York' );
+
+		// Split into two packages: Package 0 has Product A, Package 1 has Product B.
+		$split_packages_callback = function () use ( $cart_item_a, $cart_item_b ) {
+			$cart_items = WC()->cart->get_cart();
+			return array(
+				0 => array(
+					'contents'        => array( $cart_item_a => $cart_items[ $cart_item_a ] ),
+					'contents_cost'   => 100,
+					'applied_coupons' => array(),
+					'user'            => array( 'ID' => get_current_user_id() ),
+					'destination'     => array(
+						'country'  => 'US',
+						'state'    => 'NY',
+						'postcode' => '10001',
+						'city'     => 'New York',
+					),
+				),
+				1 => array(
+					'contents'        => array( $cart_item_b => $cart_items[ $cart_item_b ] ),
+					'contents_cost'   => 100,
+					'applied_coupons' => array(),
+					'user'            => array( 'ID' => get_current_user_id() ),
+					'destination'     => array(
+						'country'  => 'US',
+						'state'    => 'NY',
+						'postcode' => '10001',
+						'city'     => 'New York',
+					),
+				),
+			);
+		};
+
+		add_filter( 'woocommerce_cart_shipping_packages', $split_packages_callback );
+
+		// Package 0 selects Local Pickup (CA tax = 10%), Package 1 selects Flat Rate (NY tax = 4%).
+		WC()->session->set(
+			'chosen_shipping_methods',
+			array(
+				0 => 'local_pickup',
+				1 => 'flat_rate',
+			)
+		);
+
+		WC()->cart->calculate_totals();
+
+		$cart_items = WC()->cart->get_cart();
+		// Product A (Package 0, local pickup): 10% CA tax on $100 = $10.00.
+		$this->assertEqualsWithDelta( 10.0, (float) $cart_items[ $cart_item_a ]['line_tax'], 0.01, 'Product A in Local Pickup package should be taxed at CA base rate.' );
+
+		// Product B (Package 1, flat rate): 4% NY tax on $100 = $4.00.
+		$this->assertEqualsWithDelta( 4.0, (float) $cart_items[ $cart_item_b ]['line_tax'], 0.01, 'Product B in Flat Rate package should be taxed at NY customer rate.' );
+
+		// Total items tax should be 10 + 4 = 14.
+		$this->assertEqualsWithDelta( 14.0, (float) WC()->cart->get_cart_contents_tax(), 0.01, 'Total cart contents tax should equal combined package taxes.' );
+
+		remove_filter( 'woocommerce_cart_shipping_packages', $split_packages_callback );
+
+		WC_Tax::_delete_tax_rate( $tax_rate_ca_id );
+		WC_Tax::_delete_tax_rate( $tax_rate_ny_id );
+		WC()->cart->empty_cart();
+		$product_a->delete( true );
+		$product_b->delete( true );
+	}
 }

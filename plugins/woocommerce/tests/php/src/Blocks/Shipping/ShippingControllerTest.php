@@ -315,6 +315,113 @@ class ShippingControllerTest extends \WP_UnitTestCase {
 	}
 
 	/**
+	 * @testdox filter_order_tax_location ignores orders with mixed shipping methods.
+	 */
+	public function test_filter_order_tax_location_ignores_mixed_shipping_methods(): void {
+		$pickup_address = array(
+			'country'  => 'US',
+			'state'    => 'CA',
+			'postcode' => '90210',
+			'city'     => 'Beverly Hills',
+		);
+
+		$order = new \WC_Order();
+
+		$pickup_item = new \WC_Order_Item_Shipping();
+		$pickup_item->set_method_id( 'local_pickup' );
+		$pickup_item->set_method_title( 'Local pickup' );
+		$pickup_item->add_meta_data( '_pickup_location_address', $pickup_address );
+		$order->add_item( $pickup_item );
+
+		$flat_rate_item = new \WC_Order_Item_Shipping();
+		$flat_rate_item->set_method_id( 'flat_rate' );
+		$flat_rate_item->set_method_title( 'Flat rate' );
+		$order->add_item( $flat_rate_item );
+		$order->save();
+
+		$order = wc_get_order( $order->get_id() );
+
+		$default_location = array(
+			'country'  => 'US',
+			'state'    => 'NY',
+			'postcode' => '10001',
+			'city'     => 'New York',
+		);
+
+		$location = $this->shipping_controller->filter_order_tax_location( $default_location, $order );
+
+		$this->assertSame( $default_location, $location, 'Mixed shipping orders should keep the customer shipping tax location.' );
+	}
+
+	/**
+	 * @testdox filter_taxable_address ignores carts with mixed shipping methods.
+	 */
+	public function test_filter_taxable_address_ignores_mixed_shipping_methods(): void {
+		update_option(
+			'pickup_location_pickup_locations',
+			array(
+				0 => array(
+					'enabled' => 1,
+					'name'    => 'Store Pickup',
+					'address' => array(
+						'country'  => 'US',
+						'state'    => 'CA',
+						'postcode' => '90210',
+						'city'     => 'Beverly Hills',
+					),
+				),
+			)
+		);
+
+		WC()->session->set(
+			'chosen_shipping_methods',
+			array(
+				0 => 'pickup_location:0',
+				1 => 'flat_rate:1',
+			)
+		);
+
+		$default_address = array( 'US', 'NY', '10001', 'New York' );
+		$address         = $this->shipping_controller->filter_taxable_address( $default_address );
+
+		$this->assertSame( $default_address, $address, 'Mixed shipping cart should retain the customer taxable address.' );
+	}
+
+	/**
+	 * @testdox filter_taxable_address applies pickup address when all chosen shipping methods are local pickup.
+	 */
+	public function test_filter_taxable_address_applies_when_all_are_local_pickup(): void {
+		update_option(
+			'pickup_location_pickup_locations',
+			array(
+				0 => array(
+					'enabled' => 1,
+					'name'    => 'Store Pickup',
+					'address' => array(
+						'country'  => 'US',
+						'state'    => 'CA',
+						'postcode' => '90210',
+						'city'     => 'Beverly Hills',
+					),
+				),
+			)
+		);
+
+		WC()->session->set(
+			'chosen_shipping_methods',
+			array(
+				0 => 'pickup_location:0',
+				1 => 'pickup_location:0',
+			)
+		);
+
+		$default_address = array( 'US', 'NY', '10001', 'New York' );
+		$address         = $this->shipping_controller->filter_taxable_address( $default_address );
+
+		$this->assertSame( array( 'US', 'CA', '90210', 'Beverly Hills' ), $address, 'All-pickup cart should use the pickup address.' );
+	}
+
+	/**
 	 * Overrides the WC logger.
 	 *
 	 * @return mixed
