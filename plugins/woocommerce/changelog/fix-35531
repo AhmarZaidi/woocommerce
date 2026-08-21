@@ -1,0 +1,4 @@
+Significance: patch
+Type: fix
+
+Fix incorrect tax calculation when multiple shipping packages are combined with Local Pickup shipping methods.
