@@ -34,6 +34,8 @@ const StateInput = ( {
 	autoComplete = 'off',
 	value = '',
 	required = false,
+	errorMessage,
+	errorId,
 }: StateInputWithStatesProps ): JSX.Element => {
 	const countryStates = states[ country ];
 	const options = useMemo< SelectOption[] >( () => {
@@ -95,6 +97,8 @@ const StateInput = ( {
 				options={ options }
 				label={ label || '' }
 				id={ id }
+				errorId={ errorId }
+				errorMessage={ errorMessage }
 				onChange={ onChangeState }
 				value={ value }
 				autoComplete={ autoComplete }
@@ -107,6 +111,8 @@ const StateInput = ( {
 		<ValidatedTextInput
 			className={ className }
 			id={ id }
+			errorId={ errorId }
+			errorMessage={ errorMessage }
 			label={ label }
 			onChange={ onChangeState }
 			autoComplete={ autoComplete }
