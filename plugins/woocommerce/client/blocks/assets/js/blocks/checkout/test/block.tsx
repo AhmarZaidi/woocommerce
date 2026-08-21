@@ -575,4 +575,117 @@ describe( 'Testing Checkout', () => {
 		// Given we're checking for invisible errors here, reaching to the data store is a good option.
 		expect( select( validationStore ).hasValidationErrors() ).toBe( false );
 	} );
+
+	it( 'Clears stale shipping validation error and allows placing order after switching from incomplete shipping address to pickup', async () => {
+		const user = userEvent.setup();
+		render( <CheckoutBlock /> );
+
+		await waitFor( () =>
+			expect( screen.getByText( /Place Order/i ) ).toBeVisible()
+		);
+
+		const shippingForm = screen.getByRole( 'group', {
+			name: /shipping address/i,
+		} );
+		const countrySelect =
+			within( shippingForm ).getByLabelText( /Country\/Region/i );
+
+		// Select a country requiring state without selecting a state to register shipping_state error
+		await act( async () => {
+			await user.selectOptions( countrySelect, 'Spain' );
+		} );
+
+		// shipping_state error should be registered in validation store
+		expect(
+			select( validationStore ).getValidationError( 'shipping_state' )
+		).toBeDefined();
+
+		// Switch to Pickup
+		act( () => {
+			dispatch( checkoutStore ).setPrefersCollection( true );
+		} );
+
+		// Shipping address form should be unmounted
+		expect(
+			screen.queryByRole( 'group', { name: /shipping address/i } )
+		).not.toBeInTheDocument();
+
+		// Stale shipping validation error should be cleared upon unmounting
+		expect(
+			select( validationStore ).getValidationError( 'shipping_state' )
+		).toBeUndefined();
+
+		// Billing address form is now displayed
+		const billingForm = screen.getByRole( 'group', {
+			name: /billing address/i,
+		} );
+
+		const fields = {
+			email: screen.getByLabelText(
+				/Email address/i
+			) as HTMLInputElement,
+			firstName: within( billingForm ).getByLabelText(
+				/First name/i
+			) as HTMLInputElement,
+			lastName: within( billingForm ).getByLabelText(
+				/Last name/i
+			) as HTMLInputElement,
+			address1: within( billingForm ).getByLabelText(
+				'Address'
+			) as HTMLInputElement,
+			city: within( billingForm ).getByLabelText(
+				/City/i
+			) as HTMLInputElement,
+			state: within( billingForm ).getByLabelText(
+				/Province/i
+			) as HTMLSelectElement,
+			terms: screen.getByRole( 'checkbox', {
+				name: /terms and conditions/i,
+			} ) as HTMLInputElement,
+		};
+
+		const fieldValues: Record< keyof typeof fields, string | boolean > = {
+			email: 'test@test.com',
+			firstName: 'John',
+			lastName: 'Doe',
+			address1: '123 Main St',
+			city: 'BCN',
+			state: 'Barcelona',
+			terms: true,
+		};
+
+		// Fill the billing fields
+		await act( async () => {
+			for ( const [ key, value ] of Object.entries( fieldValues ) ) {
+				switch ( key ) {
+					case 'terms':
+						if ( fields.terms.checked !== value ) {
+							await user.click( fields.terms );
+						}
+						break;
+					case 'state':
+						await user.selectOptions(
+							fields.state,
+							value as string
+						);
+						break;
+					default:
+						await user.type(
+							fields[ key as keyof typeof fields ],
+							value as string
+						);
+				}
+			}
+		} );
+
+		// Submit the form
+		await act( async () => {
+			await user.click(
+				screen.getByRole( 'button', { name: /Place order/i } )
+			);
+		} );
+
+		// Checkout should not have validation errors blocking order
+		expect( select( validationStore ).hasValidationErrors() ).toBe( false );
+	} );
 } );

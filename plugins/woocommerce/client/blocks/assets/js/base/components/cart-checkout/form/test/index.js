@@ -6,6 +6,8 @@ import userEvent from '@testing-library/user-event';
 import { CheckoutProvider } from '@woocommerce/base-context';
 import { useCheckoutAddress } from '@woocommerce/base-context/hooks';
 import { ADDRESS_FORM_KEYS } from '@woocommerce/block-settings';
+import { select } from '@wordpress/data';
+import { validationStore } from '@woocommerce/block-data';
 
 /**
  * Internal dependencies
@@ -190,5 +192,29 @@ describe( 'Form Component', () => {
 		} );
 
 		expect( screen.getByLabelText( postalCodeRegExp ).value ).toBe( '' );
+	} );
+
+	test( 'clears validation errors when unmounted', async () => {
+		const { unmount } = renderInCheckoutProvider(
+			<WrappedAddressForm type="shipping" />
+		);
+
+		// Select Canada to trigger state validation requirement
+		await act( async () => {
+			await inputAddress( { countryKey: tertiaryAddress.countryKey } );
+		} );
+
+		// shipping_state error should be registered
+		expect(
+			select( validationStore ).getValidationError( 'shipping_state' )
+		).toBeDefined();
+
+		// Unmount the form
+		unmount();
+
+		// Validation errors should be cleared
+		expect(
+			select( validationStore ).getValidationError( 'shipping_state' )
+		).toBeUndefined();
 	} );
 } );
