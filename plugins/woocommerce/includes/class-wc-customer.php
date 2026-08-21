@@ -188,7 +188,12 @@ class WC_Customer extends WC_Legacy_Customer {
 		$tax_based_on = get_option( 'woocommerce_tax_based_on' );
 
 		// Check shipping method at this point to see if we need special handling.
-		if ( true === apply_filters( 'woocommerce_apply_base_tax_for_local_pickup', true ) && count( array_intersect( wc_get_chosen_shipping_method_ids(), apply_filters( 'woocommerce_local_pickup_methods', array( 'legacy_local_pickup', 'local_pickup' ) ) ) ) > 0 ) {
+		$chosen_methods = wc_get_chosen_shipping_method_ids();
+		// phpcs:ignore WooCommerce.Commenting.CommentHooks.MissingHookComment -- Documented in WC_Abstract_Order::get_tax_location().
+		$local_pickup_methods = apply_filters( 'woocommerce_local_pickup_methods', array( 'legacy_local_pickup', 'local_pickup' ) );
+
+		// phpcs:ignore WooCommerce.Commenting.CommentHooks.MissingHookComment -- Documented in WC_Abstract_Order::get_tax_location().
+		if ( true === apply_filters( 'woocommerce_apply_base_tax_for_local_pickup', true ) && ! empty( $chosen_methods ) && empty( array_diff( $chosen_methods, $local_pickup_methods ) ) ) {
 			$tax_based_on = TaxBasedOn::BASE;
 		}
 

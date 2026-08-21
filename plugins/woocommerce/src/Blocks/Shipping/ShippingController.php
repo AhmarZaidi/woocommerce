@@ -445,13 +445,22 @@ class ShippingController {
 		if ( null === WC()->session ) {
 			return $address;
 		}
-		// We only need to select from the first package, since pickup_location only supports a single package.
+
+		$chosen_methods_ids = wc_get_chosen_shipping_method_ids();
+		$local_pickup_ids   = LocalPickupUtils::get_local_pickup_method_ids();
+
+		// If no methods are chosen or not all chosen methods are local pickup methods, do not override address.
+		if ( empty( $chosen_methods_ids ) || ! empty( array_diff( $chosen_methods_ids, $local_pickup_ids ) ) ) {
+			return $address;
+		}
+
+		// All chosen methods are local pickup. Select from the first package.
 		$chosen_method          = current( WC()->session->get( 'chosen_shipping_methods', array() ) ) ?? '';
 		$chosen_method_id       = explode( ':', $chosen_method )[0];
 		$chosen_method_instance = explode( ':', $chosen_method )[1] ?? 0;
 
 		// phpcs:ignore WooCommerce.Commenting.CommentHooks.MissingHookComment
-		if ( $chosen_method_id && true === apply_filters( 'woocommerce_apply_base_tax_for_local_pickup', true ) && in_array( $chosen_method_id, LocalPickupUtils::get_local_pickup_method_ids(), true ) ) {
+		if ( $chosen_method_id && true === apply_filters( 'woocommerce_apply_base_tax_for_local_pickup', true ) && in_array( $chosen_method_id, $local_pickup_ids, true ) ) {
 			$pickup_locations = get_option( 'pickup_location_pickup_locations', array() );
 			$pickup_location  = $pickup_locations[ $chosen_method_instance ] ?? array();
 
@@ -502,8 +511,20 @@ class ShippingController {
 		// would miss legacy or deregistered methods on existing orders, leaving them taxed at the store base instead.
 		// phpcs:ignore WooCommerce.Commenting.CommentHooks.MissingHookComment -- Documented in WC_Abstract_Order::get_tax_location().
 		$local_pickup_method_ids = apply_filters( 'woocommerce_local_pickup_methods', array( 'legacy_local_pickup', 'local_pickup' ) );
+		$shipping_methods        = $order->get_shipping_methods();
 
-		foreach ( $order->get_shipping_methods() as $shipping_method ) {
+		if ( empty( $shipping_methods ) ) {
+			return $location;
+		}
+
+		$shipping_method_ids = ArrayUtil::select( $shipping_methods, 'get_method_id', ArrayUtil::SELECT_BY_OBJECT_METHOD );
+
+		// If not all shipping methods on the order are local pickup, do not force a single pickup location on the whole order.
+		if ( ! empty( array_diff( $shipping_method_ids, $local_pickup_method_ids ) ) ) {
+			return $location;
+		}
+
+		foreach ( $shipping_methods as $shipping_method ) {
 			if ( ! in_array( $shipping_method->get_method_id(), $local_pickup_method_ids, true ) ) {
 				continue;
 			}

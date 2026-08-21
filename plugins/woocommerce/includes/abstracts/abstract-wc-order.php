@@ -1942,8 +1942,8 @@ abstract class WC_Abstract_Order extends WC_Abstract_Legacy_Order {
 
 		$shipping_method_ids = ArrayUtil::select( $this->get_shipping_methods(), 'get_method_id', ArrayUtil::SELECT_BY_OBJECT_METHOD );
 
-		// Set shop base address as a tax location if order has local pickup shipping method.
-		if ( $apply_base_tax && count( array_intersect( $shipping_method_ids, $local_pickup_methods ) ) > 0 ) {
+		// Set shop base address as a tax location if all order shipping methods are local pickup.
+		if ( $apply_base_tax && ! empty( $shipping_method_ids ) && empty( array_diff( $shipping_method_ids, $local_pickup_methods ) ) ) {
 			$tax_based_on = TaxBasedOn::BASE;
 		}
 
@@ -1985,8 +1985,9 @@ abstract class WC_Abstract_Order extends WC_Abstract_Legacy_Order {
 	}
 
 	/**
-	 * Calculate taxes for all line items and shipping, and store the totals and tax rows.
+	 * Calculate taxes for an order.
 	 *
+	 * Uses the order's tax location to determine the rates to calculate taxes with.
 	 * If by default the taxes are based on the shipping address and the current order doesn't
 	 * have any, it would use the billing address rather than using the Shopping base location.
 	 *
@@ -2022,9 +2023,33 @@ abstract class WC_Abstract_Order extends WC_Abstract_Legacy_Order {
 			}
 		}
 
+		// phpcs:ignore WooCommerce.Commenting.CommentHooks.MissingHookComment -- Documented in WC_Abstract_Order::get_tax_location().
+		$apply_base_tax = true === apply_filters( 'woocommerce_apply_base_tax_for_local_pickup', true );
+		// phpcs:ignore WooCommerce.Commenting.CommentHooks.MissingHookComment -- Documented in WC_Abstract_Order::get_tax_location().
+		$local_pickup_methods = apply_filters( 'woocommerce_local_pickup_methods', array( 'legacy_local_pickup', 'local_pickup' ) );
+
 		foreach ( $this->get_shipping_methods() as $item_id => $item ) {
 			if ( false !== $shipping_tax_class && ! $is_vat_exempt ) {
-				$item->calculate_taxes( array_merge( $calculate_tax_for, array( 'tax_class' => $shipping_tax_class ) ) );
+				$shipping_tax_location = $calculate_tax_for;
+				if ( $apply_base_tax && in_array( $item->get_method_id(), $local_pickup_methods, true ) ) {
+					$pickup_address = $item->get_meta( '_pickup_location_address' );
+					if ( is_array( $pickup_address ) && ! empty( $pickup_address['country'] ) ) {
+						$shipping_tax_location = array(
+							'country'  => $pickup_address['country'],
+							'state'    => $pickup_address['state'] ?? '',
+							'postcode' => $pickup_address['postcode'] ?? '',
+							'city'     => $pickup_address['city'] ?? '',
+						);
+					} else {
+						$shipping_tax_location = array(
+							'country'  => WC()->countries->get_base_country(),
+							'state'    => WC()->countries->get_base_state(),
+							'postcode' => WC()->countries->get_base_postcode(),
+							'city'     => WC()->countries->get_base_city(),
+						);
+					}
+				}
+				$item->calculate_taxes( array_merge( $shipping_tax_location, array( 'tax_class' => $shipping_tax_class ) ) );
 			} else {
 				$item->set_taxes( false );
 			}

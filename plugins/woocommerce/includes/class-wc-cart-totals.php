@@ -14,6 +14,7 @@
  */
 
 use Automattic\WooCommerce\Enums\ProductTaxStatus;
+use Automattic\WooCommerce\StoreApi\Utilities\LocalPickupUtils;
 use Automattic\WooCommerce\Utilities\NumberUtil;
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -482,6 +483,91 @@ final class WC_Cart_Totals {
 	}
 
 	/**
+	 * Get tax location for an item based on its shipping package and chosen shipping method.
+	 *
+	 * @since 11.2.0
+	 * @param object $item Item to get tax location for.
+	 * @return array Location array( country, state, postcode, city ) or empty array for default customer location.
+	 */
+	protected function get_item_tax_location( $item ) {
+		if ( ! $this->cart->needs_shipping() ) {
+			return array();
+		}
+
+		$cart_item_key = property_exists( $item, 'key' ) ? (string) $item->key : '';
+		$cart_item     = property_exists( $item, 'object' ) && is_array( $item->object ) ? $item->object : array();
+		$packages      = $this->cart->get_shipping_packages();
+
+		if ( empty( $packages ) ) {
+			return array();
+		}
+
+		// phpcs:ignore WooCommerce.Commenting.CommentHooks.MissingHookComment -- Documented in WC_Abstract_Order::get_tax_location().
+		$local_pickup_method_ids = apply_filters( 'woocommerce_local_pickup_methods', array( 'legacy_local_pickup', 'local_pickup' ) );
+		$all_local_pickup_ids    = array_unique( array_merge( $local_pickup_method_ids, LocalPickupUtils::get_local_pickup_method_ids() ) );
+		$chosen_package_methods  = (array) ( WC()->session ? WC()->session->get( 'chosen_shipping_methods', array() ) : array() );
+		// phpcs:ignore WooCommerce.Commenting.CommentHooks.MissingHookComment -- Documented in WC_Abstract_Order::get_tax_location().
+		$apply_base_tax = true === apply_filters( 'woocommerce_apply_base_tax_for_local_pickup', true );
+
+		foreach ( $packages as $pkg_index => $package ) {
+			$in_package = false;
+			if ( ! empty( $cart_item_key ) && isset( $package['contents'][ $cart_item_key ] ) ) {
+				$in_package = true;
+			} elseif ( isset( $package['contents'] ) && is_array( $package['contents'] ) ) {
+				foreach ( $package['contents'] as $pkg_item ) {
+					if ( ( ! empty( $cart_item_key ) && isset( $pkg_item['key'] ) && $pkg_item['key'] === $cart_item_key ) || ( ! empty( $cart_item ) && $pkg_item === $cart_item ) ) {
+						$in_package = true;
+						break;
+					}
+				}
+			}
+
+			if ( ! $in_package ) {
+				continue;
+			}
+
+			$chosen_method          = $chosen_package_methods[ $pkg_index ] ?? '';
+			$chosen_method_id       = explode( ':', $chosen_method )[0];
+			$chosen_method_instance = explode( ':', $chosen_method )[1] ?? 0;
+
+			if ( $apply_base_tax && in_array( $chosen_method_id, $all_local_pickup_ids, true ) ) {
+				if ( 'pickup_location' === $chosen_method_id ) {
+					$pickup_locations = get_option( 'pickup_location_pickup_locations', array() );
+					$pickup_location  = $pickup_locations[ $chosen_method_instance ] ?? array();
+					if ( ! empty( $pickup_location['address']['country'] ) ) {
+						return array(
+							$pickup_location['address']['country'],
+							$pickup_location['address']['state'] ?? '',
+							$pickup_location['address']['postcode'] ?? '',
+							$pickup_location['address']['city'] ?? '',
+						);
+					}
+				}
+
+				return array(
+					WC()->countries->get_base_country(),
+					WC()->countries->get_base_state(),
+					WC()->countries->get_base_postcode(),
+					WC()->countries->get_base_city(),
+				);
+			}
+
+			if ( 'shipping' === get_option( 'woocommerce_tax_based_on' ) && ! empty( $package['destination']['country'] ) ) {
+				return array(
+					$package['destination']['country'],
+					$package['destination']['state'] ?? '',
+					$package['destination']['postcode'] ?? '',
+					$package['destination']['city'] ?? '',
+				);
+			}
+
+			break;
+		}
+
+		return array();
+	}
+
+	/**
 	 * Get tax rates for an item. Caches rates in class to avoid multiple look ups.
 	 *
 	 * @param  object $item Item to get tax rates for.
@@ -491,8 +577,15 @@ final class WC_Cart_Totals {
 		if ( ! wc_tax_enabled() ) {
 			return array();
 		}
-		$tax_class      = $item->product->get_tax_class();
-		$item_tax_rates = isset( $this->item_tax_rates[ $tax_class ] ) ? $this->item_tax_rates[ $tax_class ] : $this->item_tax_rates[ $tax_class ] = WC_Tax::get_rates( $item->product->get_tax_class(), $this->cart->get_customer() );
+		$tax_class = $item->product->get_tax_class();
+		$location  = $this->get_item_tax_location( $item );
+
+		if ( ! empty( $location ) ) {
+			$cache_key      = $tax_class . '_' . md5( (string) wp_json_encode( $location ) );
+			$item_tax_rates = isset( $this->item_tax_rates[ $cache_key ] ) ? $this->item_tax_rates[ $cache_key ] : $this->item_tax_rates[ $cache_key ] = WC_Tax::get_rates_from_location( $tax_class, $location, $this->cart->get_customer() );
+		} else {
+			$item_tax_rates = isset( $this->item_tax_rates[ $tax_class ] ) ? $this->item_tax_rates[ $tax_class ] : $this->item_tax_rates[ $tax_class ] = WC_Tax::get_rates( $item->product->get_tax_class(), $this->cart->get_customer() );
+		}
 
 		// Allow plugins to filter item tax rates.
 		return apply_filters( 'woocommerce_cart_totals_get_item_tax_rates', $item_tax_rates, $item, $this->cart );
